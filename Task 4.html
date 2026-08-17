@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Real-Time Communication - Multi-User & Collab</title>
+<style>
+    body { font-family: 'Segoe UI', Tahoma, sans-serif; background: rgb(171, 171, 103); margin: 0; color: white; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+    
+    #authScreen {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0, 0, 0, 0.9); z-index: 100;
+        display: flex; flex-direction: column; justify-content: center; align-items: center;
+    }
+    .auth-box {
+        background: black; padding: 40px; border-radius: 8px; text-align: center; border: 1px solid black;
+    }
+    .auth-box input {
+        padding: 10px; font-size: 16px; border-radius: 4px; border: 1px solid black;
+        background: black; color: white; margin-bottom: 15px; width: 80%;
+    }
+    .auth-box button {
+        background: red; color: white; width: auto; border-radius: 4px;
+        height: 40px; font-weight: bold; padding: 0 20px; font-size: 14px;
+    }
+
+    header { padding: 15px 20px; font-size: 18px; display: flex; justify-content: space-between; align-items: center; background: transparent; z-index: 10; border: none; }
+    
+    .status { font-size: 12px; padding: 6px 12px; border-radius: 5px; cursor: pointer; transition: 0.3s; font-weight: bold; user-select: none; }
+    .not-recording { background: black; }
+    .not-recording:hover { background: black; }
+    .recording { background: rgb(172, 2, 2); animation: blink 1s infinite alternate; }
+    @keyframes blink { from { opacity: 1; } to { opacity: 0.4; } }
+
+    .main-workspace { flex: 1; display: flex; flex-direction: row; overflow: hidden; width: 100%; }
+
+    .video-grid { 
+        flex: 1; display: flex; flex-direction: row; padding: 15px; gap: 20px; 
+        align-items: center; justify-content: center; width: 100%; 
+        box-sizing: border-box; flex-wrap: wrap; overflow-y: auto;
+    }
+    
+    .video-box { 
+        background: black; width: 100%; max-width: 320px; aspect-ratio: 16/9; 
+        border-radius: 8px; display: flex; flex-direction: column; align-items: center; 
+        justify-content: center; position: relative; flex-shrink: 0; 
+        box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+    }
+    
+    .dp { width: 100px; height: 100px; border-radius: 50%; object-fit: cover; border: 4px solid transparent; transition: 0.3s; }
+    .live-video { width: 100%; height: 100%; object-fit: cover; display: none; border-radius: 8px; }
+    
+    .name-tag { position: absolute; bottom: 10px; left: 10px; background: rgba(0,0,0,0.7); padding: 4px 8px; border-radius: 4px; font-size: 12px; z-index: 5; }
+    
+    .side-panel {
+        width: 0; background: black; color: white; display: flex; flex-direction: column; 
+        transition: 0.3s; border-left: 1px solid black; overflow: hidden;
+    }
+    .side-panel.active { width: 350px; }
+    .panel-header { padding: 15px; background: black; font-weight: bold; display: flex; justify-content: space-between; align-items: center; }
+    .close-btn { cursor: pointer; color: red; font-size: 18px; }
+    
+    #whiteboardArea { flex: 1; display: none; flex-direction: column; }
+    canvas { background: white; flex: 1; cursor: crosshair; }
+    .clear-btn { background: red; color: white; width: 100%; border-radius: 0; height: 40px; font-size: 14px; }
+    
+    #filesArea { flex: 1; display: none; flex-direction: column; padding: 15px; overflow-y: auto; }
+    .file-item { background: black; padding: 10px; border-radius: 5px; margin-bottom: 10px; display: flex; justify-content: space-between; font-size: 13px; }
+    .file-item a { color: red; text-decoration: none; font-weight: bold; cursor: pointer; }
+
+    .controls { padding: 20px 15px; display: flex; justify-content: center; gap: 15px; background: transparent; border: none; z-index: 10; flex-wrap: wrap; }
+    
+    button { background: black; color: white; border: none; width: 50px; height: 50px; border-radius: 50%; cursor: pointer; font-size: 18px; transition: 0.2s; display: flex; justify-content: center; align-items: center; box-shadow: 0 4px 8px rgba(0,0,0,0.3); }
+    button:hover { background:black; }
+    .off { background: orangered !important; }
+    .end-call { background:red; width: auto; height: 50px; padding: 0 20px; border-radius: 25px; font-size: 14px; font-weight: bold; }
+    .end-call:hover { background: darkred; }
+    
+    #endScreen { display: none; flex-direction: column; align-items: center; justify-content: center; height: 100vh; text-align: center; }
+    #endScreen h1 { font-size: 30px; margin-bottom: 10px; }
+
+    .reaction-wrapper { position: relative; display: flex; align-items: center; justify-content: center; }
+    .emoji-tray { position: absolute; bottom: 65px; background: rgb(63, 96, 111); padding: 10px 15px; border-radius: 30px; display: none; gap: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); z-index: 20; align-items: center; }
+    .emoji-tray span { font-size: 24px; cursor: pointer; transition: transform 0.2s; user-select: none; }
+    .emoji-tray span:hover { transform: scale(1.3); }
+    
+    .add-emoji-btn { font-size: 14px !important; background: rgb(0, 174, 255); border-radius: 50%; width: 28px; height: 28px; display: flex; justify-content: center; align-items: center; color: white; }
+    .add-emoji-btn:hover { background: rgb(0, 145, 207); color: white; transform: scale(1.1) !important; }
+
+    .floating-emoji { position: fixed; bottom: 120px; left: 50%; font-size: 40px; pointer-events: none; animation: floatUp 2s ease-out forwards; z-index: 50; }
+    @keyframes floatUp { 0% { opacity: 1; transform: translate(-50%, 0) scale(0.8); } 50% { transform: translate(-50%, -150px) scale(1.2); } 100% { opacity: 0; transform: translate(-50%, -300px) scale(1); } }
+</style>
+</head>
+<body>
+
+    <div id="authScreen">
+        <div class="auth-box">
+            <h2 style="margin-top:0;">User Authentication</h2>
+            <p style="font-size: 13px; color: rgb(224, 157, 157);">Please enter your name to join the meeting.</p>
+            <input type="text" id="username" placeholder="Your Name...">
+            <button onclick="login()">Join Meeting</button>
+        </div>
+    </div>
+
+    <div id="callScreen" style="display: none; flex-direction: column; height: 100%;">
+        <header>
+            <div style="font-weight: bold;">Meet</div>
+            <div id="recordBtn" class="status not-recording" onclick="toggleRecord()">⚪ Record</div>
+        </header>        
+        
+        <div class="main-workspace">
+            <div class="video-grid"> 
+                <div class="video-box" id="myVideoBox">
+                    <img id="myDp" class="dp" style="border-color: orange;"src="https://images.unsplash.com/photo-1488426862026-3ee34a7d66df?w=200&q=80" alt="Your DP">
+                    <img id="myLiveVideo" class="live-video" src="https://images.unsplash.com/photo-1517841905240-472988babdf9?w=500&q=80" alt="Live Feed">
+                    <div class="name-tag"><span id="myName">You</span> <span id="myMicStatus"></span></div>
+                </div>
+                <div class="video-box">
+                    <img class="dp" style="border-color: blue;" src="https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=200&q=80" alt="Rayyan DP">
+                    <div class="name-tag">Rayyan</div>
+                </div>
+                <div class="video-box">
+                    <img class="dp" style="border-color:red;" src="https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=200&q=80" alt="Sadia DP">
+                    <div class="name-tag">Sadia</div>
+                </div>
+                <div class="video-box">
+                    <img class="dp" style="border-color: skyblue;" src="https://images.unsplash.com/photo-1531427186611-ecfd6d936c79?w=200&q=80" alt="Shan DP">
+                    <div class="name-tag">Shan</div>
+                </div>
+                <div class="video-box">
+                    <img class="dp" style="border-color: purple;" src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200&q=80" alt="Ayesha DP">
+                    <div class="name-tag">Ayesha</div>
+                </div>
+                <div class="video-box">
+                    <img class="dp" style="border-color: yellow;" src="https://images.unsplash.com/photo-1599566150163-29194dcaad36?w=200&q=80" alt="Faisal DP">
+                    <div class="name-tag">Faisal</div>
+                </div>
+                <div class="video-box">
+                    <img class="dp" style="border-color: rgb(3, 197, 197);" src="https://images.unsplash.com/photo-1517365830460-955ce3ccd263?w=200&q=80" alt="Farha DP">
+                    <div class="name-tag">Farha</div>
+                </div>
+                <div class="video-box">
+                    <img class="dp" style="border-color: rgb(209, 5, 5);" src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&q=80" alt="Fahad DP">
+                    <div class="name-tag">Fahad</div>
+                </div>
+            </div>
+
+            <div class="side-panel" id="sidePanel">
+                <div class="panel-header">
+                    <span id="panelTitle">Tools</span>
+                    <span class="close-btn" onclick="closePanel()">✖</span>
+                </div>
+                
+                <div id="whiteboardArea">
+                    <canvas id="canvas"></canvas>
+                    <button class="clear-btn" onclick="clearCanvas()">Clear Drawing</button>
+                </div>
+
+                <div id="filesArea">
+                    <p style="font-size: 12px; color: rgb(222, 217, 217); margin-top:0;">Shared files will appear here.</p>
+                    <div id="fileList"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button id="micBtn" onclick="toggleMic()">🎤</button>
+            <button id="camBtn" onclick="toggleCam()" class="off">📷</button>
+            <button id="shareBtn" onclick="toggleShare()">💻</button>
+            
+            <button id="fileBtn" onclick="document.getElementById('fileUpload').click()">📎</button>
+            <input type="file" id="fileUpload" style="display: none;" onchange="handleFileUpload(event)">
+
+            <button id="boardBtn" onclick="togglePanel('whiteboard')">🖍️</button>
+            
+            <div class="reaction-wrapper">
+                <div class="emoji-tray" id="emojiTray">
+                    <span onclick="sendReaction('👍')">👍</span>
+                    <span onclick="sendReaction('❤️')">❤️</span>
+                    <span onclick="sendReaction('😂')">😂</span>
+                    <span onclick="sendReaction('👏')">👏</span>
+                    <span onclick="sendReaction('🎉')">🎉</span>
+                    <span onclick="sendReaction('🙄')"> 🙄</span>
+                    <span onclick="sendReaction('👎')"> 👎</span>
+
+                    <span id="addEmojiBtn" class="add-emoji-btn" onclick="addCustomEmoji()" title="Add custom emoji">➕</span>
+                </div>
+                <button id="reactionBtn" onclick="toggleEmojiTray()">😊</button>
+            </div>
+
+            <button class="end-call" onclick="endCall()">📞End Call</button>
+        </div>
+    </div>
+
+    <div id="endScreen">
+        <h1>You left the meeting</h1>
+        <p>The call has been ended.</p>
+        <button style="width: auto; padding: 10px 25px; border-radius: 5px; margin-top: 15px; background: rgb(57, 57, 177); color: white; font-size: 14px; border: none; cursor: pointer;" onclick="location.reload()">Rejoin</button>
+    </div>
+
+    <script>
+        function login() {
+            let name = document.getElementById('username').value.trim();
+            if(name !== "") {
+                document.getElementById('myName').innerText = name + " (You)";
+            }
+            document.getElementById('authScreen').style.display = "none";
+            document.getElementById('callScreen').style.display = "flex";
+            setTimeout(resizeCanvas, 200);
+        }
+
+        let isMicOn = true;
+        let isCamOn = false;
+        let isSharing = false;
+        let isRecording = false;
+
+        function toggleRecord() {
+            isRecording = !isRecording;
+            const recBtn = document.getElementById('recordBtn');
+            if(isRecording) {
+                recBtn.classList.remove('not-recording');
+                recBtn.classList.add('recording');
+                recBtn.innerHTML = "🔴 REC";
+            } else {
+                recBtn.classList.remove('recording');
+                recBtn.classList.add('not-recording');
+                recBtn.innerHTML = "⚪ Record";
+                alert("Recording has been stopped and securely saved!");
+            }
+        }
+
+        function toggleMic() {
+            isMicOn = !isMicOn;
+            const btn = document.getElementById('micBtn');
+            const status = document.getElementById('myMicStatus');
+            if(isMicOn) {
+                btn.classList.remove('off'); btn.innerHTML = "🎤"; status.innerText = "";
+            } else {
+                btn.classList.add('off'); btn.innerHTML = "🔇"; status.innerText = "(Muted)";
+            }
+        }
+
+        function toggleCam() {
+            isCamOn = !isCamOn;
+            const btn = document.getElementById('camBtn');
+            const myDp = document.getElementById('myDp');
+            const myLiveVideo = document.getElementById('myLiveVideo');
+            if(isCamOn) {
+                btn.classList.remove('off'); myDp.style.display = "none"; myLiveVideo.style.display = "block"; 
+            } else {
+                btn.classList.add('off'); myDp.style.display = "block"; myLiveVideo.style.display = "none"; 
+            }
+        }
+
+        function toggleShare() {
+            isSharing = !isSharing;
+            const btn = document.getElementById('shareBtn');
+            if(isSharing) {
+                btn.style.background = "#1a73e8"; alert("Screen sharing started.");
+            } else {
+                btn.style.background = "black"; alert("Screen sharing stopped.");
+            }
+        }
+
+        function endCall() {
+            document.getElementById('callScreen').style.display = "none";
+            document.getElementById('endScreen').style.display = "flex";
+        }
+        
+        function toggleEmojiTray() {
+            const tray = document.getElementById('emojiTray');
+            tray.style.display = (tray.style.display === 'flex') ? 'none' : 'flex';
+        }
+
+        function sendReaction(emoji) {
+            const floatingEmoji = document.createElement('div');
+            floatingEmoji.className = 'floating-emoji';
+            floatingEmoji.innerText = emoji;
+            const randomX = Math.floor(Math.random() * 80) - 40;
+            floatingEmoji.style.left = `calc(50% + ${randomX}px)`;
+            document.body.appendChild(floatingEmoji);
+            document.getElementById('emojiTray').style.display = 'none';
+            setTimeout(() => { floatingEmoji.remove(); }, 2000);
+        }
+
+        function addCustomEmoji() {
+            let newEmoji = prompt("Add your custom emoji (e.g. 🚀, 🔥):");
+            if (newEmoji && newEmoji.trim() !== "") {
+                const tray = document.getElementById('emojiTray');
+                const addBtn = document.getElementById('addEmojiBtn');
+                const newSpan = document.createElement('span');
+                newSpan.innerText = newEmoji;
+                newSpan.onclick = function() { sendReaction(newEmoji); };
+                tray.insertBefore(newSpan, addBtn);
+            }
+        }
+
+        function togglePanel(type) {
+            document.getElementById('sidePanel').classList.add('active');
+            if(type === 'whiteboard') {
+                document.getElementById('panelTitle').innerText = "Whiteboard";
+                document.getElementById('whiteboardArea').style.display = "flex";
+                document.getElementById('filesArea').style.display = "none";
+                setTimeout(resizeCanvas, 100);
+            } else if(type === 'files') {
+                document.getElementById('panelTitle').innerText = "Shared Files";
+                document.getElementById('whiteboardArea').style.display = "none";
+                document.getElementById('filesArea').style.display = "flex";
+            }
+        }
+
+        function closePanel() {
+            document.getElementById('sidePanel').classList.remove('active');
+        }
+
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (file) {
+                togglePanel('files');
+                const list = document.getElementById('fileList');
+                const item = document.createElement('div');
+                item.className = 'file-item';
+                const displayName = file.name.length > 20 ? file.name.substring(0, 20) + '...' : file.name;
+                item.innerHTML = `<span>📄 ${displayName}</span> <a onclick="alert('Downloading ${file.name}...')">Get</a>`;
+                list.appendChild(item);
+                event.target.value = '';
+            }
+        }
+
+        // Whiteboard Canvas Drawing Logic
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        let painting = false;
+
+        function resizeCanvas() {
+            if(document.getElementById('sidePanel').classList.contains('active')){
+                canvas.width = canvas.parentElement.clientWidth;
+                canvas.height = canvas.parentElement.clientHeight - 40; 
+            }
+        }
+        window.addEventListener('resize', resizeCanvas);
+
+        function startPosition(e) { painting = true; draw(e); }
+        function endPosition() { painting = false; ctx.beginPath(); }
+        function draw(e) {
+            if (!painting) return;
+            ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.strokeStyle = 'black';
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left; const y = e.clientY - rect.top;
+            ctx.lineTo(x, y); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(x, y);
+        }
+        canvas.addEventListener('mousedown', startPosition);
+        canvas.addEventListener('mouseup', endPosition);
+        canvas.addEventListener('mousemove', draw);
+
+        function clearCanvas() { ctx.clearRect(0, 0, canvas.width, canvas.height); }
+    </script>
+</body>
+</html>
